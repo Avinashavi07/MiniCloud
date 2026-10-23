@@ -1,0 +1,47 @@
+# Phase 1 development stack.
+#
+# PostgreSQL runs in Docker.
+# The Spring Boot control plane runs on the Ubuntu host JVM so it can later
+# open qemu:///system without hiding libvirt behind a container.
+# The React UI can run with `npm run dev` on the host, or optionally here.
+#
+# Do not blindly containerize the hypervisor integration. KVM and libvirt
+# need host devices, cgroups, and privileges that a generic backend
+# container does not have.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: minicloud-postgres
+    environment:
+      POSTGRES_DB: minicloud
+      POSTGRES_USER: minicloud
+      POSTGRES_PASSWORD: minicloud
+    ports:
+      - "5432:5432"
+    volumes:
+      - minicloud-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minicloud -d minicloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    image: node:22-alpine
+    container_name: minicloud-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    environment:
+      - npm_config_devdir=/tmp/npm-dev
+    profiles:
+      - ui
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  minicloud-pg:
